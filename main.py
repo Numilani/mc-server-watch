@@ -1,5 +1,7 @@
 import sqlite3
 import configparser
+import schedule
+import time
 from sqlite3 import Error
 
 import datetime
@@ -10,22 +12,21 @@ import ssl
 import User
 import Watch
 
+# CONFIG VARS
 config = configparser.ConfigParser()
 config.read("./settings.cfg")
 
-# SQLite settings
 db_file = config['TECHNICAL']['dbFile']
-
-# server status settings
 url = config['SERVER']['url']
-
-# email settings
 port = config['EMAIL']['port']
 sender_email = config['EMAIL']['sender_email']
 password = config['EMAIL']['password']
+checkInterval = int(config['TECHNICAL']['checkInterval'])
+bufferInterval = int(config['TECHNICAL']['bufferIntervalPerPerson'])
 
 
 # --------
+
 
 def main():
     _conn = establish_db_connection()
@@ -37,20 +38,23 @@ def main():
     users = query_users(_conn)
 
     for user in users:
-        watched_players_online = []
-        print(user)
-        watches = query_watches(_conn, user.ID)
-        for watch in watches:
-            print(watch)
-            if watch.Username in online_players:
-                if watch.LastNotify is None or datetime.datetime.strptime(watch.LastNotify,
-                                                                          '%Y-%m-%d %H:%M:%S.%f') < datetime.datetime.now() - datetime.timedelta(
-                        hours=1):
-                    watched_players_online.append(watch.Username)
-                    update_watch_lastnotify(_conn, watch.ID)
-        if len(watched_players_online) > 0:
-            send_email(user.Email, generate_email(watched_players_online))
-            print(f"{str(datetime.datetime.now())} - sent email to {user.Email}")
+        if user.Username not in online_players:
+            watched_players_online = []
+            print(user)
+            watches = query_watches(_conn, user.ID)
+            for watch in watches:
+                print(watch)
+                if watch.Username in online_players:
+                    if watch.LastNotify is None or datetime.datetime.strptime(watch.LastNotify,
+                                                                              '%Y-%m-%d %H:%M:%S.%f') < datetime.datetime.now() - datetime.timedelta(
+                            minutes=bufferInterval):
+                        watched_players_online.append(watch.Username)
+                        update_watch_lastnotify(_conn, watch.ID)
+            if len(watched_players_online) > 0:
+                send_email(user.Email, generate_email(watched_players_online))
+                print(f"{str(datetime.datetime.now())} - sent email to {user.Email}")
+        else:
+            print(f"user {user.Username} is online; skipping checks.")
 
     _conn.close()
 
@@ -119,4 +123,10 @@ def send_email(recipient, message):
         server.sendmail(sender_email, recipient, message)
 
 
-main()
+schedule.every(checkInterval).minutes.do(main)
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
+
+# main()
