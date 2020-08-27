@@ -1,5 +1,5 @@
-#mc-server-watch
-A simple tool that uses the mcsrvstat.us API to generate emails based on a watchlist.
+# mc-server-watch
+A simple tool that uses the mcsrvstat.us API to generate emails based on a watchlist. Just something I threw together basically overnight.
 
 ## Usage
 
